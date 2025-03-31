@@ -1,0 +1,59 @@
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <input_file> <number_of_repetitions>"
+    exit 1
+fi
+
+input_file=$1
+total_runs=$2
+
+echo "Computing lower bound..."
+lower_bound=$(./lower_bound < "$input_file")
+lower_bound=$(printf "%.0f" $lower_bound)
+echo "Lower bound: $lower_bound"
+
+echo "Running algorithm1..."
+algo1_cost=$(./algorithm1 < "$input_file" | tail -1 | cut -d' ' -f3)
+algo1_cost=$(printf "%.0f" $algo1_cost)
+
+echo "Algorithm1 cost: $algo1_cost"
+
+better_count=0
+sum_costs=0
+min_cost=""
+max_cost=""
+
+echo "Running algorithm2 $total_runs times..."
+for ((i=1; i<=$total_runs; i++)); do
+    algo2_cost=$(./algorithm2 < "$input_file" | tail -1 | cut -d' ' -f3)
+    algo2_cost=$(printf "%.0f" $algo2_cost)
+    
+    sum_costs=$(echo "$sum_costs + $algo2_cost" | bc -l)
+    
+    if [ -z "$min_cost" ] || (( $(echo "$algo2_cost < $min_cost" | bc -l) )); then
+        min_cost=$algo2_cost
+    fi
+    
+    if [ -z "$max_cost" ] || (( $(echo "$algo2_cost > $max_cost" | bc -l) )); then
+        max_cost=$algo2_cost
+    fi
+    
+    if (( $(echo "$algo2_cost <= $algo1_cost" | bc -l) )); then
+        ((better_count++))
+        echo "Run $i: Algorithm2 better or equal ($algo2_cost <= $algo1_cost)"
+    else
+        echo "Run $i: Algorithm1 better ($algo2_cost > $algo1_cost)"
+    fi
+done
+
+average_cost=$(echo "scale=2; $sum_costs / $total_runs" | bc -l)
+
+echo "----------------------------------------"
+echo "Lower bound: $lower_bound"
+echo "Algorithm1: $algo1_cost"
+echo "Algorithm2 minimum: $min_cost"
+echo "Algorithm2 maximum: $max_cost"
+echo "Algorithm2 average cost: $average_cost"
+echo "Algorithm2 was better or equal $better_count out of $total_runs times"
+echo "Percentage: $(echo "scale=2; $better_count * 100 / $total_runs" | bc)%" 
