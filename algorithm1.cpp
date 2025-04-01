@@ -1,5 +1,4 @@
 #include <iostream>
-#include <lemon/core.h>
 #include <lemon/list_graph.h>
 #include <lemon/maps.h>
 #include <lemon/dijkstra.h>
@@ -101,7 +100,7 @@ int main() {
         total_cost += u[e] * c[e];
     }
 
-    cout << "total cost: " << total_cost << '\n';
+    cout << "total cost:\n" << total_cost << '\n';
 
     FilteredGraph::NodeMap<bool> visited(G, false); bool valid=true;
     dfs(G, u, b_in, b_out, r, s, visited, valid, root);

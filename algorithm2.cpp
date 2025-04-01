@@ -1,15 +1,11 @@
 #include <bits/stdc++.h>
-#include <lemon/core.h>
 #include <lemon/list_graph.h>
 #include <lemon/maps.h>
 #include <lemon/dijkstra.h>
 #include <lemon/connectivity.h>
-#include <lemon/path.h>
 #include <lemon/random.h>
-#include <lemon/adaptors.h>
 #include <lemon/kruskal.h>
 #include <lemon/full_graph.h>
-#include <lemon/dfs.h>
 
 using namespace lemon;
 using namespace std;
@@ -19,16 +15,16 @@ typedef IterableBoolMap<ListGraph, ListGraph::Edge>::TrueIt TreeEdgeIt;
 typedef FilterNodes<ListGraph, ListGraph::NodeMap<bool>> FilteredGraph;
 typedef FilterEdges<ListGraph, ListGraph::EdgeMap<bool>> TreeEdges;
 
-int dfs(const TreeEdges &g, ListGraph::EdgeMap<long double> &u, const ListGraph::NodeMap<int> &subtree, int bout_s, ListGraph::NodeMap<bool> &visited, ListGraph::Node v) {
+int dfs(const TreeEdges &g, ListGraph::EdgeMap<long double> &u, const ListGraph::NodeMap<int> &b_in, ListGraph::NodeMap<bool> &visited, ListGraph::Node v) {
     visited[v] = true;
-    int r0_sum = subtree[v];
+    int r_sum = b_in[v];
     for (TreeEdges::OutArcIt e(g, v); e != INVALID; ++e) {
         if (visited[g.target(e)]) continue;
-        int r0_subtree = dfs(g, u, subtree, bout_s, visited, g.target(e));
-        u[e] += min(bout_s, r0_subtree);
-        r0_sum += r0_subtree;
+        int r_subtree = dfs(g, u, b_in, visited, g.target(e));
+        u[e] += r_subtree;
+        r_sum += r_subtree;
     }
-    return r0_sum;
+    return r_sum;
 }
 
 int main(){
@@ -97,42 +93,37 @@ int main(){
     int R0 = *nonempty_subset_it;
 
     FullGraph closure(n);
-    FullGraph::EdgeMap<long double> dist(closure,1e18);
+    FullGraph::EdgeMap<long double> dist(closure,numeric_limits<long double>::infinity());
     ListGraph::NodeMap<FullGraph::Node> ref(g);
     FullGraph::NodeMap<ListGraph::Node> rev(closure);
     for(int i=0;i<n;++i){
         ref[g.nodeFromId(i)]=closure.nodeFromId(i);       
         rev[closure.nodeFromId(i)]=g.nodeFromId(i);
     } 
-    IterableBoolMap<ListGraph, ListGraph::Node> steiner(g,false);
+    IterableBoolMap<ListGraph, ListGraph::Node> sources(g,false);
     ListGraph::NodeMap<vector<ListGraph::Edge>> parent(g,vector<ListGraph::Edge>(n,INVALID));
     Dijkstra<ListGraph, ListGraph::EdgeMap<long double>> dijkstra(g, c);
     FullGraph::NodeMap<bool> closure_no_nodes(closure, false);
     ListGraph::EdgeMap<bool> g_no_edges(g,false);
     FilterNodes<FullGraph, FullGraph::NodeMap<bool>> gt(closure, closure_no_nodes);
-    ListGraph::NodeMap<int> subtree(g,0);
 
     dijkstra.init();
     for(TerminalIt i(terminal); i != INVALID; ++i)
         if(subset[i][R0]){
             gt.enable(ref[i]);
-            steiner[i]=true;
+            sources[i]=true;
             dijkstra.addSource(i);
         }
 
     dijkstra.start();
-    
-    for (TerminalIt r(terminal); r != INVALID; ++r) {
-        if(!b_in[r]) continue;
-        ListGraph::Node i = r;
-        if (!dijkstra.reached(i)) continue;
-        IterableBoolMap<ListGraph, ListGraph::Edge> tree(g,false);
-        while (!subset[i][R0] && dijkstra.predArc(i) != INVALID) {
-            u[dijkstra.predArc(i)] += b_in[r];
-            i = dijkstra.predNode(i);
-        }
-        subtree[i] += b_in[r];
-    }
+    TreeEdges dijkstra_tree(g, g_no_edges);
+    for(ListGraph::NodeIt i(g); i != INVALID; ++i)
+        if(dijkstra.predArc(i) != INVALID)
+            dijkstra_tree.enable(dijkstra.predArc(i));
+
+    TreeEdges::NodeMap<bool> visited(dijkstra_tree, false);
+    for(TerminalIt r0(sources); r0 != INVALID; ++r0)
+        dfs(dijkstra_tree, u, b_in, visited, r0);
 
     for(TerminalIt i(terminal); i != INVALID; ++i){
         Dijkstra<ListGraph, ListGraph::EdgeMap<long double>> dijkstra1(g, c);
@@ -144,27 +135,26 @@ int main(){
             parent[i][g.id(j)] = dijkstra1.predArc(j);               
         }
     } 
-
+    
     for(TerminalIt s(terminal); s != INVALID; ++s){
         if(!b_out[s]) continue;
         if(!subset[s][R0]) gt.enable(ref[s]);
         vector<FullGraph::Edge> closure_edges; 
-        closure_edges.reserve(n);
+        closure_edges.reserve(t);
         kruskal(gt, dist, back_inserter(closure_edges));
         if(!subset[s][R0]) gt.disable(ref[s]);
-        TreeEdges tree(g, g_no_edges);
-        for(auto e: closure_edges){
-            auto i = rev[closure.v(e)];
-            auto u = rev[closure.u(e)];
+        IterableBoolMap<ListGraph, ListGraph::Edge> mst(g, false);
+        for(FullGraph::Edge e: closure_edges){
+            ListGraph::Node i = rev[closure.v(e)];
+            ListGraph::Node u = rev[closure.u(e)];
             while(i != u && parent[u][g.id(i)] != INVALID){
-                tree.enable(parent[u][g.id(i)]);
+                mst[parent[u][g.id(i)]] = true;
                 i = g.oppositeNode(i,parent[u][g.id(i)]);
+                cout << g.id(i) << '\n';
             }
         }
-        TreeEdges::NodeMap<bool> visited(tree, false);
-        dfs(tree, u, subtree, b_out[s], visited, s);
-        // for(TreeEdgeIt e(tree_edges); e != INVALID; ++e)
-        //     u[e] += b_out[s];
+        for(TreeEdgeIt e(mst); e != INVALID; ++e)
+            u[e] += b_out[s];
     }
 
     long double total_cost = 0;
@@ -175,5 +165,5 @@ int main(){
         }
     }
 
-    cout << "total cost: " << total_cost << '\n';
+    cout << "total cost:\n" << total_cost << '\n';
 }

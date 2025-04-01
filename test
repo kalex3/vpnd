@@ -17,10 +17,10 @@ echo "Running algorithm1..."
 algo1_cost=$(./algorithm1 < "$input_file" | tail -1 | cut -d' ' -f3)
 algo1_cost=$(printf "%.0f" $algo1_cost)
 
-echo "Algorithm1 cost: $algo1_cost"
+echo "Algorithm1 result: $algo1_cost"
 
-better_count=0
 sum_costs=0
+sum_min=0
 min_cost=""
 max_cost=""
 
@@ -28,9 +28,15 @@ echo "Running algorithm2 $total_runs times..."
 for ((i=1; i<=$total_runs; i++)); do
     algo2_cost=$(./algorithm2 < "$input_file" | tail -1 | cut -d' ' -f3)
     algo2_cost=$(printf "%.0f" $algo2_cost)
+    echo "Run $i: $algo2_cost"
     
     sum_costs=$(echo "$sum_costs + $algo2_cost" | bc -l)
-    
+    if (( $(echo "$algo2_cost <= $algo1_cost" | bc -l) )); then
+        sum_min=$(echo "$sum_min + $algo2_cost" | bc -l)
+    else
+        sum_min=$(echo "$sum_min + $algo1_cost" | bc -l)
+    fi
+
     if [ -z "$min_cost" ] || (( $(echo "$algo2_cost < $min_cost" | bc -l) )); then
         min_cost=$algo2_cost
     fi
@@ -39,21 +45,17 @@ for ((i=1; i<=$total_runs; i++)); do
         max_cost=$algo2_cost
     fi
     
-    if (( $(echo "$algo2_cost <= $algo1_cost" | bc -l) )); then
-        ((better_count++))
-        echo "Run $i: Algorithm2 better or equal ($algo2_cost <= $algo1_cost)"
-    else
-        echo "Run $i: Algorithm1 better ($algo2_cost > $algo1_cost)"
-    fi
 done
 
-average_cost=$(echo "scale=2; $sum_costs / $total_runs" | bc -l)
-
-echo "----------------------------------------"
+echo "--------------------------------------------------------------------------------"
 echo "Lower bound: $lower_bound"
 echo "Algorithm1: $algo1_cost"
 echo "Algorithm2 minimum: $min_cost"
 echo "Algorithm2 maximum: $max_cost"
-echo "Algorithm2 average cost: $average_cost"
-echo "Algorithm2 was better or equal $better_count out of $total_runs times"
-echo "Percentage: $(echo "scale=2; $better_count * 100 / $total_runs" | bc)%" 
+echo "Algorithm2 average: $(echo "scale=2; $sum_costs / $total_runs" | bc -l)"
+echo "--------------------------------------------------------------------------------"
+echo "Algorithm1 approximation ratio <= $(echo "scale=2; $algo1_cost / $lower_bound" | bc -l)"
+echo "Algorithm2 expected approximation ratio <= $(echo "scale=2; $sum_costs / $total_runs / $lower_bound" | bc -l)"
+echo "Algorithm2 worst-case approximation ratio <= $(echo "scale=2; $max_cost / $lower_bound" | bc -l)"
+echo "min(alg1, alg2) expected approximation ratio <= $(echo "scale=2; $sum_min / $total_runs / $lower_bound" | bc -l)"
+echo "--------------------------------------------------------------------------------"
